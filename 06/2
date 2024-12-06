@@ -1,0 +1,137 @@
+const std = @import("std");
+const mem = std.mem;
+const log = std.log;
+const util = @import("util");
+const assert = std.debug.assert;
+const print = std.debug.print;
+
+const input_path = "06/input0";
+
+const V2 = @Vector(2, isize);
+
+const State = enum {
+    free,
+    obscured,
+};
+const Input = struct {
+    input: std.ArrayList(State),
+    width: usize,
+    height: usize,
+    pos: V2,
+};
+
+const Flags = struct {
+    visited: bool = false,
+};
+
+const Dir = enum {
+    up,
+    right,
+    down,
+    left,
+};
+
+pub fn iFromXY(x: isize, y: isize, w: usize, h: usize) usize {
+    assert(x >= 0);
+    assert(y >= 0);
+    assert(x < @as(isize, @intCast(w)));
+    assert(y < @as(isize, @intCast(h)));
+    const xu: usize = @intCast(x);
+    const yu: usize = @intCast(y);
+    return (yu * w) + xu;
+}
+pub fn xFromI(i: usize, w: usize, h: usize) isize {
+    assert(i < (w * h));
+    const wi: isize = @intCast(w);
+    const ii: isize = @intCast(i);
+    return ii % wi;
+}
+pub fn yFromI(i: usize, w: usize, h: usize) isize {
+    assert(i < (w * h));
+    const wi: isize = @intCast(w);
+    const ii: isize = @intCast(i);
+    return ii / wi;
+}
+
+pub fn inBounds(x: isize, y: isize, w: usize, h: usize) bool {
+    const wi: isize = @intCast(w);
+    const hi: isize = @intCast(h);
+    return x >= 0 and y >= 0 and x < wi and y < hi;
+}
+
+pub fn main() !void {
+    std.debug.print("Day 06\n", .{});
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .safety = true }){};
+    defer std.debug.assert(gpa.deinit() == .ok);
+    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+    defer arena.deinit();
+    const arena_alloc = arena.allocator();
+
+    const input = try std.fs.cwd().readFileAlloc(arena_alloc, input_path, 1 << 20);
+    const d = blk: {
+        var data = std.ArrayList(State).init(arena_alloc);
+        errdefer data.deinit();
+
+        var line_it = std.mem.splitScalar(u8, input, '\n');
+        var width: usize = 0;
+        var height: usize = 0;
+        var pos: ?V2 = null;
+        while (line_it.next()) |line| {
+            if (line.len == 0) continue;
+            for (line, 0..) |c, x| {
+                switch (c) {
+                    '^' => {
+                        pos = V2{ @intCast(x), @intCast(height) };
+                        try data.append(.free);
+                    },
+                    '.' => try data.append(.free),
+                    '#' => try data.append(.obscured),
+                    else => unreachable,
+                }
+            }
+            height += 1;
+            width = line.len;
+        }
+        break :blk Input{
+            .width = width,
+            .height = height,
+            .pos = pos.?,
+            .input = data,
+        };
+    };
+
+    print("width: {} height: {} (initial pos: ({}, {}))\n", .{ d.width, d.height, d.pos.x, d.pos.y });
+    for (0..d.height) |y| {
+        for (0..d.width) |x| {
+            const i: usize = iFromXY(@intCast(x), @intCast(y), d.width, d.height);
+            const c: u8 = if (i == iFromXY(d.pos.x, d.pos.y, d.width, d.height)) 'P' else switch (d.input.items[i]) {
+                .free => '.',
+                .obscured => '#',
+            };
+            print("{c}", .{c});
+        }
+        print("\n", .{});
+    }
+
+    // Solution start
+    var visited: std.ArrayList(Flags) = blk: {
+        var v = try std.ArrayList(Flags).initCapacity(arena_alloc, d.width * d.height);
+        try v.resize(d.width * d.height);
+        @memset(v.items, Flags{});
+        break :blk v;
+    };
+    var pos = d.pos;
+    var dir = Dir.up;
+    while (inBounds(pos.x, pos.y, d.width, d.height)) {
+        const inc: V2 = incFromDir(dir);
+    }
+}
+
+fn incFromDir(dir: Dir) V2 {
+    return switch (dir) {
+        .up => .{ .x = 0, .y = -1 },
+        .right => .{ .x = 1, .y = 0 },
+        .down => .{ .x = 0, .y = 1 },
+        .left => .{ .x = -1, .y = 0 },
+    };
+}
